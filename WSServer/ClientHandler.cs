@@ -35,7 +35,7 @@ namespace WSServer
         private void doHandle()
         {
             stream = client.GetStream();
-            System.Timers.Timer timer = new System.Timers.Timer(10000);
+            System.Timers.Timer timer = new System.Timers.Timer(30000);
             timer.Elapsed += new ElapsedEventHandler(this.PingPong);
             timer.AutoReset = true;
             timer.Enabled = true;
@@ -98,7 +98,7 @@ namespace WSServer
                     if (opcode == 0xA)
                     {
                         this.pinged = false;
-                        //Console.WriteLine("Ponged!");
+                        Console.WriteLine("Pong!");
                     } 
                     else if (msglen == 0)
                     {
@@ -121,8 +121,6 @@ namespace WSServer
                     }
                     else
                         Console.WriteLine("mask bit not set");
-
-                    Console.WriteLine();
                 }
 
 
@@ -152,7 +150,7 @@ namespace WSServer
                     user.Handler = this;
                     this.User = user;
                     ClientHandler.receivers.Add(user);
-                    //this.SendStatuses();
+                    this.SendStatuses();
                     Console.WriteLine("Username: {0}", user.Username);
                     Console.WriteLine("Password: {0}", user.Password);
                     break;
@@ -265,6 +263,7 @@ namespace WSServer
 
                 this.stream.Write(preparedMsg, 0, preparedMsg.Length);
                 this.pinged = true;
+                Console.Write(this.User.Username + ": Ping - ");
             }
         }
     }
