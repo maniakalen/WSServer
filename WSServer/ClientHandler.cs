@@ -11,30 +11,30 @@ namespace WSServer
 {
     class ClientHandler
     {
-        public static List<ClientHandler> handlersStack;
-        public TcpClient client;
-        public static List<Receiver> receivers;
-
+        public static List<ClientHandler> HandlersStack;
+        public TcpClient Client;
+        public static List<Receiver> Receivers;
+        public static DbConnector Db;
 
         public User User;
-        private Thread th;
-        private NetworkStream stream;
-        public bool pinged = false;
+        private Thread Thread;
+        private NetworkStream Stream;
+        public bool Pinged = false;
         public ClientHandler(TcpClient client)
         {
-            this.client = client;
-            handlersStack.Add(this);
+            this.Client = client;
+            HandlersStack.Add(this);
         }
 
-        public void startClient()
+        public void StartClient()
         {
-            this.th = new Thread(doHandle);
-            th.Start();
+            this.Thread = new Thread(DoHandle);
+            Thread.Start();
         }
 
-        private void doHandle()
+        private void DoHandle()
         {
-            stream = client.GetStream();
+            Stream = Client.GetStream();
             System.Timers.Timer timer = new System.Timers.Timer(30000);
             timer.Elapsed += new ElapsedEventHandler(this.PingPong);
             timer.AutoReset = true;
@@ -43,12 +43,12 @@ namespace WSServer
             // enter to an infinite cycle to be able to handle every change in stream
             while (true)
             {
-                while (stream.CanRead && !stream.DataAvailable) ;
-                if (!stream.CanRead || !this.client.Connected) break;
-                while (client.Available < 3) ; // match against "get"
+                while (Stream.CanRead && !Stream.DataAvailable) ;
+                if (!Stream.CanRead || !this.Client.Connected) break;
+                while (Client.Available < 3) ; // match against "get"
 
-                byte[] bytes = new byte[client.Available];
-                stream.Read(bytes, 0, client.Available);
+                byte[] bytes = new byte[Client.Available];
+                Stream.Read(bytes, 0, Client.Available);
                 string s = Encoding.UTF8.GetString(bytes);
 
                 if (Regex.IsMatch(s, "^GET", RegexOptions.IgnoreCase))
@@ -71,7 +71,7 @@ namespace WSServer
                         "Upgrade: websocket\r\n" +
                         "Sec-WebSocket-Accept: " + swkaSha1Base64 + "\r\n\r\n");
 
-                    stream.Write(response, 0, response.Length);
+                    Stream.Write(response, 0, response.Length);
                 }
                 else
                 {
@@ -97,7 +97,7 @@ namespace WSServer
 
                     if (opcode == 0xA)
                     {
-                        this.pinged = false;
+                        this.Pinged = false;
                         Console.WriteLine("Pong!");
                     } 
                     else if (msglen == 0)
@@ -116,7 +116,7 @@ namespace WSServer
                         string text = Encoding.UTF8.GetString(decoded);
                         Console.WriteLine("{0}", text);
 
-                        if (text == "[Leaving]" || !this.handleMessage(text, stream))
+                        if (text == "[Leaving]" || !this.HandleMessage(text, Stream))
                             break;
                     }
                     else
@@ -125,96 +125,117 @@ namespace WSServer
 
 
             }
-            this.stream.Close();
-            this.client.Close();
+            this.Close();
             Console.WriteLine("Closing thread!");
             timer.Stop();
             timer.Dispose();
-            this.th.Join();
+            this.Thread.Join();
         }
 
-        private bool handleMessage(string msg, NetworkStream stream)
+        private bool HandleMessage(string msg, NetworkStream stream)
         {
             var comDefinition = new Communication();
-            var comm = JsonConvert.DeserializeAnonymousType(msg, comDefinition);
-            var type = (Communication.Types)comm.Type;
-            
-            switch (type)
+            try
             {
-                case Communication.Types.User:
-                    var user = this.Extract(comm.Body, new User());
-                    if (!user.Authenticate())
-                    {
-                        return false;
-                    }
-                    user.Handler = this;
-                    this.User = user;
-                    ClientHandler.receivers.Add(user);
-                    this.SendStatuses();
-                    Console.WriteLine("Username: {0}", user.Username);
-                    Console.WriteLine("Password: {0}", user.Password);
-                    break;
-                case Communication.Types.Invitation:
-                    var inv = this.Extract(comm.Body, new Invitation());
-                    if (inv.isAccepted)
-                    {
-                        ChatRoom room = new ChatRoom();
-                        foreach (ClientHandler h in ClientHandler.handlersStack)
+                var comm = JsonConvert.DeserializeAnonymousType(msg, comDefinition);
+            
+                var type = (Communication.Types)comm.Type;
+            
+                switch (type)
+                {
+                    case Communication.Types.User:
+                        var user = this.Extract(comm.Body, new User());
+                        if (!user.Authenticate())
                         {
-                            if (h.User.IsReceiver(inv.Sender) || h.User.IsReceiver(inv.Target))
+                            return false;
+                        }
+                        user.Handler = this;
+                        this.User = user;
+                        ClientHandler.Receivers.Add(user);
+                        Console.WriteLine("Username: {0}", user.Username);
+                        Console.WriteLine("Password: {0}", user.Hash);
+                        break;
+                    case Communication.Types.Invitation:
+                        var inv = this.Extract(comm.Body, new Invitation());
+                        if (inv.isAccepted)
+                        {
+                            ChatRoom room = new ChatRoom();
+                            foreach (ClientHandler h in ClientHandler.HandlersStack)
                             {
-                                room.Add(h);
+                                if (h.User.IsReceiver(inv.Sender) || h.User.IsReceiver(inv.Target))
+                                {
+                                    room.Add(h);
+                                }
+                            }
+                            ClientHandler.Receivers.Add(room);
+                        }
+                        foreach (ClientHandler ch in ClientHandler.HandlersStack)
+                        {
+                            if (ch.User.Username == inv.Target)
+                            {
+                                inv.SendInvitation(ch.User);
+                                break;
                             }
                         }
-                        ClientHandler.receivers.Add(room);
-                    }
-                    foreach (ClientHandler ch in ClientHandler.handlersStack)
-                    {
-                        if (ch.User.Username == inv.Target)
+                        break;
+                    case Communication.Types.Message:
+                        var message = this.Extract(comm.Body, new Message());
+                        foreach (Receiver r in ClientHandler.Receivers)
                         {
-                            inv.SendInvitation(ch.User);
-                            break;
+                            if (r.IsReceiver(message.Receiver))
+                            {
+                                r.SendMessage(message);
+                            }
                         }
-                    }
-                    break;
-                case Communication.Types.Message:
-                    var message = this.Extract(comm.Body, new Message());
-                    foreach (Receiver r in ClientHandler.receivers)
-                    {
-                        if (r.IsReceiver(message.Receiver))
-                        {
-                            r.SendMessage(message);
-                        }
-                    }
-                    /*foreach (ClientHandler handler in handlersStack)
-                    {
-                        if (handler.User != null && handler.User.Username == message.Receiver && handler.client.Connected)
-                        {
-                            handler.User.SendMessage(message);
-                        }
-                    }*/
-                    break;
-            }
+                        break;
+                    case Communication.Types.System:
+                        var systemMessage = this.Extract(comm.Body, new SystemMessage());
+                        systemMessage.HandleMessage(this);
+                        break;
+                }
 
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return true;
+            }
             return true;
+        }
+
+        public static void Broadcast(Message msg)
+        {
+            foreach (ClientHandler h in ClientHandler.HandlersStack)
+            {
+                if (msg.Sender == null || (h.User != null && h.User.Username != msg.Sender))
+                {
+                    h.User.SendMessage(msg);
+                }   
+            }
+        }
+
+        public void Close()
+        {
+            this.Stream.Close();
+            this.Client.Close();
         }
 
         public NetworkStream GetStream()
         {
-            return stream;
+            return Stream;
         }
 
-        public bool isOnline()
+        public bool IsOnline()
         {
-            return this.client.Connected && this.stream.CanRead && this.stream.CanWrite;
+            return this.Client.Connected && this.Stream.CanRead && this.Stream.CanWrite;
         }
 
-        private void SendStatuses()
+        public void SendStatuses()
         {
             List<string> users = new List<string>();
-            foreach (ClientHandler h in handlersStack)
+            foreach (ClientHandler h in HandlersStack)
             {
-                if (h.isOnline() && h.User != null && h.User.Username != this.User.Username)
+                if (h.IsOnline() && h.User != null && h.User.Username != this.User.Username)
                 {
                     users.Add(h.User.Username);
                 }
@@ -238,16 +259,12 @@ namespace WSServer
         private void PingPong(object source, ElapsedEventArgs e)
         {
             
-            if (this.pinged)
+            if (this.Pinged)
             {
                 Console.WriteLine("Closing socket");
                 Message msg = new Message() { Body = "off", Sender = this.User.Username };
-                foreach (ClientHandler h in ClientHandler.handlersStack)
-                {
-
-                }
-                this.stream.Close();
-                this.client.Close();
+                ClientHandler.Broadcast(msg);
+                this.Close();
             }
             else
             {
@@ -261,155 +278,10 @@ namespace WSServer
                 Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
                 Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
 
-                this.stream.Write(preparedMsg, 0, preparedMsg.Length);
-                this.pinged = true;
+                this.Stream.Write(preparedMsg, 0, preparedMsg.Length);
+                this.Pinged = true;
                 Console.Write(this.User.Username + ": Ping - ");
             }
         }
-    }
-
-    class User : Receiver
-    {
-        public string Username;
-        public string Password;
-
-        public ClientHandler Handler;
-
-        public void SetName(string name)
-        {
-            this.Username = name;
-        }
-        public bool IsReceiver(string name)
-        {
-            return this.Username == name;
-        }
-
-        public bool Authenticate()
-        {
-            return true;
-        }
-        
-        public void SendMessage(Message msg)
-        {
-            msg.Receiver = this.Username;
-            msg.SendMessage(this.Handler.GetStream());
-        }
-    }
-
-    class Message
-    {
-        public string Receiver;
-        public string Sender;
-        public string Body;
-
-        public void SendMessage(NetworkStream clientStream)
-        {
-            lock (clientStream)
-            {
-                string msg = JsonConvert.SerializeObject(this);
-                Console.WriteLine("Sending {0} to {1}", msg, this.Receiver);
-                try
-                {
-                    byte fin = 0b10000000;
-                    byte opcode = 0b00000001;
-                    byte firstByte = opcode;
-                    int len = 125;
-                    do
-                    {
-                        if (msg.Length < len)
-                        {
-                            len = msg.Length;
-                            firstByte = (byte)(firstByte | fin);
-                        }
-                        string message = msg.Substring(0, len);
-                        msg = msg.Remove(0, len);
-
-                        byte[] byteMessage = Encoding.ASCII.GetBytes(message);
-                        byte[] empty = new byte[2] { firstByte, Convert.ToByte(message.Length) };
-                        byte[] preparedMsg = new byte[byteMessage.Length + empty.Length];
-                        Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
-                        Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
-
-                        clientStream.Write(preparedMsg, 0, preparedMsg.Length);
-                        firstByte = 0;
-                    } while (msg.Length > 0);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Error: {0}", e.Message);
-                }
-            }
-        }
-    }
-
-    class ChatRoom : Receiver
-    {
-        private List<ClientHandler> Participants { get; set; }
-
-        private string Name;
-
-        public void SetName(string name)
-        {
-            this.Name = name;
-        }
-
-        public bool IsReceiver(string name)
-        {
-            return this.Name == name;
-        }
-        
-
-        public void Add(ClientHandler handler)
-        {
-            this.Participants.Add(handler);
-        }
-
-        public void SendMessage(Message msg)
-        {
-            foreach (ClientHandler handler in this.Participants)
-            {
-                if (handler.client.Connected && handler.GetStream().CanWrite && handler.User != null && handler.User.Username != msg.Sender)
-                {
-                    msg.SendMessage(handler.GetStream());
-                }
-            }
-        }
-    }
-
-    class Communication
-    {
-        public enum Types
-        {
-            User,
-            Message,
-            Invitation
-        };
-        public int Type;
-        public string Body;
-    }
-
-    class Invitation
-    {
-        public string Sender;
-        public string Target;
-
-        public bool isAccepted;
-
-
-        public void SendInvitation(User rec)
-        {
-            Message msg = new Message();
-            msg.Body = JsonConvert.SerializeObject(this);
-            msg.Receiver = this.isAccepted ? this.Sender : this.Target;
-            msg.Sender = this.isAccepted ? this.Target : this.Sender;
-            rec.SendMessage(msg);
-        }
-    }
-
-    interface Receiver
-    {
-        public void SetName(string name);
-        public bool IsReceiver(string name);
-        public void SendMessage(Message msg);
     }
 }
