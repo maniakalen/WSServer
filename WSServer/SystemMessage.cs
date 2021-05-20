@@ -14,9 +14,9 @@ namespace WSServer
             if (this.Body == "EXIT")
             {
                 Message msg = new Message() { Body = "<[Off]>", Sender = handler.User.Username };
-                ClientHandler.Broadcast(msg);
+                ClientHandler.Broadcast(msg, Communication.Types.System);
                 handler.Close();
-            } else if (this.Body == "Statuses")
+            } else if (this.Body == "STATUSES")
             {
                 handler.SendStatuses();
             }

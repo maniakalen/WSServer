@@ -110,7 +110,20 @@ namespace WSServer
             {
                 if (msg.Sender == null || (h.User != null && h.User.Username != msg.Sender))
                 {
-                    h.User.SendMessage(msg);
+                    msg.Receiver = h.User.Username;
+                    Communication.Send(h.GetStream(), Communication.Types.Message, msg);
+                }
+            }
+        }
+
+        public static void Broadcast(Message msg, Communication.Types Type)
+        {
+            foreach (ClientHandler h in ClientHandler.HandlersStack)
+            {
+                if (msg.Sender == null || (h.User != null && h.User.Username != msg.Sender))
+                {
+                    msg.Receiver = h.User.Username;
+                    Communication.Send(h.GetStream(), Type, msg);
                 }   
             }
         }
