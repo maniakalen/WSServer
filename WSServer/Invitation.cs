@@ -1,4 +1,4 @@
-﻿
+﻿using System;
 using Newtonsoft.Json;
 
 namespace WSServer
@@ -6,21 +6,14 @@ namespace WSServer
     /// <summary>
     /// Chat invitation class
     /// </summary>
-    class Invitation
+    class Invitation : Message
     {
-        /// <summary>
-        /// Sender name
-        /// </summary>
-        public string Sender;
-        /// <summary>
-        /// Receiver name
-        /// </summary>
-        public string Target;
-
         /// <summary>
         /// Whether invitation is accepted or not
         /// </summary>
-        public bool isAccepted;
+        public bool isAccepted = false;
+
+        protected new Communication.Types Type = Communication.Types.Invitation;
 
         /// <summary>
         /// Send invitation/invitation response
@@ -28,12 +21,32 @@ namespace WSServer
         /// <param name="rec">User to receive the invitation</param>
         public void SendInvitation(User rec)
         {
-            Message msg = new Message();
-            msg.Body = JsonConvert.SerializeObject(this);
-            msg.Receiver = this.isAccepted ? this.Sender : this.Target;
-            msg.Sender = this.isAccepted ? this.Target : this.Sender;
+            Console.WriteLine("Type {0}", this.Type.ToString());
+            Communication.Send(rec.Handler.GetStream(), this.Type, this);
+        }
 
-            rec.SendMessage(msg);
+        public void HandleInvitation()
+        {
+            if (this.isAccepted)
+            {
+                ChatRoom room = new ChatRoom();
+                foreach (ClientHandler h in ClientHandler.HandlersStack)
+                {
+                    if (h.User.IsReceiver(this.Sender) || h.User.IsReceiver(this.Receiver))
+                    {
+                        room.Add(h);
+                    }
+                }
+                ClientHandler.Receivers.Add(room);
+            }
+            foreach (ClientHandler ch in ClientHandler.HandlersStack)
+            {
+                if (ch.User.Username == this.Receiver)
+                {
+                    this.SendInvitation(ch.User);
+                    break;
+                }
+            }
         }
     }
 }

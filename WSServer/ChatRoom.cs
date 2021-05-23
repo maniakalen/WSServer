@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace WSServer
 {
@@ -7,6 +8,18 @@ namespace WSServer
         private List<ClientHandler> Participants { get; set; }
 
         private string Name;
+
+        public ChatRoom()
+        {
+            this.Name = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds().ToString();
+            this.Participants = new List<ClientHandler>();
+        }
+
+        public ChatRoom(String name)
+        {
+            this.Name = name;
+            this.Participants = new List<ClientHandler>();
+        }
 
         public void SetName(string name)
         {

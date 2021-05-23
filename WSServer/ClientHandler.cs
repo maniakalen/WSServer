@@ -6,6 +6,7 @@ using System.Threading;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using System.Timers;
+using System.Threading.Tasks;
 
 namespace WSServer
 {
@@ -15,11 +16,13 @@ namespace WSServer
         public TcpClient Client;
         public static List<Receiver> Receivers;
         public static DbConnector Db;
-
         public User User;
+        public bool Pinged = false;
+
         private Thread Thread;
         private NetworkStream Stream;
-        public bool Pinged = false;
+        private System.Timers.Timer Timer;
+
         public ClientHandler(TcpClient client)
         {
             this.Client = client;
@@ -35,20 +38,17 @@ namespace WSServer
         private void DoHandle()
         {
             Stream = Client.GetStream();
-            System.Timers.Timer timer = new System.Timers.Timer(30000);
-            timer.Elapsed += new ElapsedEventHandler(this.PingPong);
-            timer.AutoReset = true;
-            timer.Enabled = true;
-
+            Stream.ReadTimeout = 2000;
+            int readyBytes;
             // enter to an infinite cycle to be able to handle every change in stream
             while (true)
             {
                 while (Stream.CanRead && !Stream.DataAvailable) ;
                 if (!Stream.CanRead || !this.Client.Connected) break;
                 while (Client.Available < 3) ; // match against "get"
-
-                byte[] bytes = new byte[Client.Available];
-                Stream.Read(bytes, 0, Client.Available);
+                readyBytes = Client.Available;
+                byte[] bytes = new byte[readyBytes];
+                Stream.Read(bytes, 0, readyBytes);
                 string s = Encoding.UTF8.GetString(bytes);
 
                 if (Regex.IsMatch(s, "^GET", RegexOptions.IgnoreCase))
@@ -59,17 +59,14 @@ namespace WSServer
                 {
                     break;
                 }
-
-
             }
+            this.StopPingPong();
             this.Close();
             Console.WriteLine("Closing thread!");
-            timer.Stop();
-            timer.Dispose();
             this.Thread.Join();
         }
 
-        private bool HandleMessage(string msg, NetworkStream stream)
+        private bool HandleMessage(string msg)
         {
             var comDefinition = new Communication();
             try
@@ -82,7 +79,6 @@ namespace WSServer
                 {
                     case Communication.Types.User:
                         return this.UserLogin(comm);
-                        break;
                     case Communication.Types.Invitation:
                         this.HandleInvitation(comm);
                         break;
@@ -155,8 +151,8 @@ namespace WSServer
                 }
             }
 
-            Message msg = new Message() { Sender = "System.Statuses", Body = JsonConvert.SerializeObject(users.ToArray()) };
-            this.User.SendMessage(msg);
+            SystemMessage msg = new SystemMessage() { Sender = "System.Statuses", Receiver = this.User.Username, Body = JsonConvert.SerializeObject(users.ToArray()), Status = true };
+            Communication.Send(this.GetStream(), Communication.Types.System, msg);
         }
 
         private T Extract<T>(string json, T definition)
@@ -173,7 +169,7 @@ namespace WSServer
 
         private void PingPong(object source, ElapsedEventArgs e)
         {
-            
+
             if (this.Pinged)
             {
                 Console.WriteLine("Closing socket");
@@ -183,19 +179,21 @@ namespace WSServer
             }
             else
             {
-                //Console.WriteLine("Pinging");
-                byte pingCode = 0x9;
-                byte fin = 0b10000000;
-                string message = "Ping";
-                byte[] byteMessage = Encoding.ASCII.GetBytes(message);
-                byte[] empty = new byte[2] { (byte)(pingCode | fin), Convert.ToByte(message.Length) };
-                byte[] preparedMsg = new byte[byteMessage.Length + empty.Length];
-                Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
-                Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
+                Task t = Task.Run(() => {
+                    byte pingCode = 0x9;
+                    byte fin = 0b10000000;
+                    string message = "Ping";
+                    byte[] byteMessage = Encoding.ASCII.GetBytes(message);
+                    byte[] empty = new byte[2] { (byte)(pingCode | fin), Convert.ToByte(message.Length) };
+                    byte[] preparedMsg = new byte[byteMessage.Length + empty.Length];
+                    Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
+                    Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
 
-                this.Stream.Write(preparedMsg, 0, preparedMsg.Length);
-                this.Pinged = true;
-                Console.Write(this.User.Username + ": Ping - ");
+                    this.Stream.Write(preparedMsg, 0, preparedMsg.Length);
+                    this.Pinged = true;
+                    Console.Write(this.User.Username + ": Ping - ");
+                });
+                t.Wait();
             }
         }
 
@@ -265,51 +263,42 @@ namespace WSServer
                 string text = Encoding.UTF8.GetString(decoded);
                 Console.WriteLine("{0}", text);
 
-                return (text != "[Leaving]" && this.HandleMessage(text, Stream));
+                return (text != "[Leaving]" && this.HandleMessage(text));
                     
             }
             else
                 Console.WriteLine("mask bit not set");
 
-            return false;
+            return true;
         }
 
         private bool UserLogin(Communication comm)
         {
             var user = this.Extract(comm.Body, new User());
+            SystemMessage msg;
             if (!user.Authenticate())
             {
+                msg = new SystemMessage() { Sender = "System", Receiver = user.Username, Body = "Failed to authenticate", Status = false };
+                msg.SetType(Communication.Types.User);
+                msg.SendMessage(this.GetStream());
                 return false;
             }
+            msg = new SystemMessage() { Sender = "System", Receiver = user.Username, Body = "Authentication successful", Status = true };
+            msg.SetType(Communication.Types.User);
+            msg.SendMessage(this.GetStream());
             user.Handler = this;
             this.User = user;
             ClientHandler.Receivers.Add(user);
+            this.StartPingPong();
+            SystemMessage.SendJoinMessage(user);
             return true;
         }
 
         private void HandleInvitation(Communication comm)
         {
+            Console.WriteLine("Handling invitation");
             var inv = this.Extract(comm.Body, new Invitation());
-            if (inv.isAccepted)
-            {
-                ChatRoom room = new ChatRoom();
-                foreach (ClientHandler h in ClientHandler.HandlersStack)
-                {
-                    if (h.User.IsReceiver(inv.Sender) || h.User.IsReceiver(inv.Target))
-                    {
-                        room.Add(h);
-                    }
-                }
-                ClientHandler.Receivers.Add(room);
-            }
-            foreach (ClientHandler ch in ClientHandler.HandlersStack)
-            {
-                if (ch.User.Username == inv.Target)
-                {
-                    inv.SendInvitation(ch.User);
-                    break;
-                }
-            }
+            inv.HandleInvitation();
         }
 
         private void HandleMessage(Communication comm)
@@ -321,6 +310,24 @@ namespace WSServer
                 {
                     r.SendMessage(message);
                 }
+            }
+        }
+
+        private void StartPingPong()
+        {
+            Timer = new System.Timers.Timer(30000);
+            Timer.Elapsed += new ElapsedEventHandler(this.PingPong);
+            Timer.AutoReset = true;
+            Timer.Enabled = true;
+        }
+
+        private void StopPingPong()
+        {
+            if (Timer != null && Timer.Enabled)
+            {
+                Timer.Stop();
+                Timer.Dispose();
+                Timer = null;
             }
         }
     }

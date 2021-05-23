@@ -12,10 +12,12 @@ namespace WSServer
         public string Sender;
         public string Body;
 
+        protected Communication.Types Type = Communication.Types.Message;
+
         public void SendMessage(NetworkStream clientStream)
         {
             string body = JsonConvert.SerializeObject(this);
-            Communication.Send(clientStream, Communication.Types.Message, this);
+            Communication.Send(clientStream, this.Type, this);
         }
     }
 }

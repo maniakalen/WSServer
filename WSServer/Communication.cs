@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace WSServer
@@ -43,9 +44,10 @@ namespace WSServer
         {
             if (clientStream.CanWrite)
             {
-                lock (clientStream)
-                {
+                Task t = Task.Run(() => {
                     string msg = JsonConvert.SerializeObject(this);
+                    Console.WriteLine("Sending message: {0}", msg);
+                    if (!clientStream.CanWrite) Console.WriteLine("Cannot write to stream!");
                     try
                     {
                         byte fin = 0b10000000;
@@ -68,14 +70,15 @@ namespace WSServer
                             Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
                             Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
                             clientStream.Write(preparedMsg, 0, preparedMsg.Length);
-                            firstByte = 0; 
+                            firstByte = 0;
                         } while (msg.Length > 0);
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine("Error: {0}", e.Message);
                     }
-                }
+                });
+                t.Wait();
             }
         }
 
