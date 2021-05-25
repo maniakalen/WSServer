@@ -41,7 +41,7 @@ namespace WSServer
             }
             foreach (ClientHandler ch in ClientHandler.HandlersStack)
             {
-                if (ch.User.Username == this.Receiver)
+                if (ch.User.Username == this.Receiver && ch.IsOnline())
                 {
                     this.SendInvitation(ch.User);
                     break;

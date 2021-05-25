@@ -126,6 +126,7 @@ namespace WSServer
 
         public void Close()
         {
+            this.StopPingPong();
             this.Stream.Close();
             this.Client.Close();
         }
@@ -173,8 +174,8 @@ namespace WSServer
             if (this.Pinged)
             {
                 Console.WriteLine("Closing socket");
-                Message msg = new Message() { Body = "off", Sender = this.User.Username };
-                ClientHandler.Broadcast(msg);
+                Message msg = new SystemMessage() { Body = "<[Off]>", Sender = this.User.Username };
+                ClientHandler.Broadcast(msg, Communication.Types.System);
                 this.Close();
             }
             else
@@ -183,7 +184,7 @@ namespace WSServer
                     byte pingCode = 0x9;
                     byte fin = 0b10000000;
                     string message = "Ping";
-                    byte[] byteMessage = Encoding.ASCII.GetBytes(message);
+                    byte[] byteMessage = Encoding.UTF8.GetBytes(message);
                     byte[] empty = new byte[2] { (byte)(pingCode | fin), Convert.ToByte(message.Length) };
                     byte[] preparedMsg = new byte[byteMessage.Length + empty.Length];
                     Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
@@ -261,7 +262,6 @@ namespace WSServer
                     decoded[i] = (byte)(bytes[offset + i] ^ masks[i % 4]);
 
                 string text = Encoding.UTF8.GetString(decoded);
-                Console.WriteLine("{0}", text);
 
                 return (text != "[Leaving]" && this.HandleMessage(text));
                     
