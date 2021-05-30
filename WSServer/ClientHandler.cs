@@ -181,6 +181,7 @@ namespace WSServer
             else
             {
                 Task t = Task.Run(() => {
+                    this.Pinged = true;
                     byte pingCode = 0x9;
                     byte fin = 0b10000000;
                     string message = "Ping";
@@ -191,7 +192,6 @@ namespace WSServer
                     Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
 
                     this.Stream.Write(preparedMsg, 0, preparedMsg.Length);
-                    this.Pinged = true;
                     Console.Write(this.User.Username + ": Ping - ");
                 });
                 t.Wait();
