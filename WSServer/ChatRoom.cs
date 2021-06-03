@@ -7,12 +7,15 @@ namespace WSServer
     {
         private List<ClientHandler> Participants { get; set; }
 
+        private List<Message> History;
+
         private string Name;
 
         public ChatRoom()
         {
             this.Name = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds().ToString();
             this.Participants = new List<ClientHandler>();
+            this.History = new List<Message>();
         }
 
         public ChatRoom(String name)
@@ -39,9 +42,21 @@ namespace WSServer
 
         public void SendMessage(Message msg)
         {
+            this.History.Add(msg);
             foreach (ClientHandler handler in this.Participants)
             {
                 if (handler.Client.Connected && handler.GetStream().CanWrite && handler.User != null && handler.User.Username != msg.Sender)
+                {
+                    msg.SendMessage(handler.GetStream());
+                }
+            }
+        }
+
+        public void SendHistory(ClientHandler handler)
+        {
+            if (this.Participants.Contains(handler))
+            {
+                foreach (Message msg in this.History)
                 {
                     msg.SendMessage(handler.GetStream());
                 }
