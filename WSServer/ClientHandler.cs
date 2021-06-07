@@ -7,6 +7,9 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using System.Timers;
 using System.Threading.Tasks;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using System.Security.Authentication;
 
 namespace WSServer
 {
@@ -18,9 +21,11 @@ namespace WSServer
         public static DbConnector Db;
         public User User;
         public bool Pinged = false;
+        public static X509Certificate2 serverCertificate = null;
 
         private Thread Thread;
         private NetworkStream Stream;
+        private SslStream SslStream { get; set; }
         private System.Timers.Timer Timer;
 
         public ClientHandler(TcpClient client)
@@ -38,19 +43,34 @@ namespace WSServer
         private void DoHandle()
         {
             Stream = Client.GetStream();
-            Stream.ReadTimeout = 2000;
-            int readyBytes;
+            SslStream = new SslStream(Stream, false);
+            try
+            {
+                SslStream.AuthenticateAsServer(ClientHandler.serverCertificate, false, SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13, true);
+
+                // Set timeouts for the read and write to 5 seconds.
+                SslStream.ReadTimeout = 5000;
+                SslStream.WriteTimeout = 5000;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error during SSL authentication with the client:" + ex);
+                return;
+            }
+
+            //Stream.ReadTimeout = 2000;
+            //int readyBytes;
             // enter to an infinite cycle to be able to handle every change in stream
             while (true)
             {
-                while (Stream.CanRead && !Stream.DataAvailable) ;
-                if (!Stream.CanRead || !this.Client.Connected) break;
-                while (Client.Available < 3) ; // match against "get"
-                readyBytes = Client.Available;
-                byte[] bytes = new byte[readyBytes];
-                Stream.Read(bytes, 0, readyBytes);
+                byte[] bytes = ReadMessage(SslStream);
+               
+                /*byte[] bytes = new byte[readyBytes];*/
+                //readyBytes = Client.Available;
+                 
+                //Stream.Read(bytes, 0, readyBytes);
                 string s = Encoding.UTF8.GetString(bytes);
-
+                Console.WriteLine(s);
                 if (Regex.IsMatch(s, "^GET", RegexOptions.IgnoreCase))
                 {
                     this.Handshake(s);
@@ -329,6 +349,31 @@ namespace WSServer
                 Timer.Dispose();
                 Timer = null;
             }
+        }
+
+        static byte[] ReadMessage(SslStream sslStream)
+        {
+            // Read the  message sent by the client.
+            // The client signals the end of the message using the
+            // "<EOF>" marker.
+            byte[] buffer = new byte[2048];
+            StringBuilder messageData = new StringBuilder();
+            int bytes = -1;
+            do
+            {
+                // Read the client's test message.
+                bytes = sslStream.Read(buffer, 0, buffer.Length);
+
+                // Use Decoder class to convert from bytes to UTF8
+                // in case a character spans two buffers.
+                Decoder decoder = Encoding.UTF8.GetDecoder();
+                char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
+                decoder.GetChars(buffer, 0, bytes, chars, 0);
+                messageData.Append(chars);
+                
+            } while (bytes != 0);
+
+            return Encoding.UTF8.GetBytes(messageData.ToString());
         }
     }
 }

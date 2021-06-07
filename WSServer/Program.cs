@@ -3,15 +3,21 @@ using System.Net;
 using System.Net.Sockets;
 using WSServer;
 using System.Collections.Generic;
-
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 class Server
 {
-
     public static void Main()
     {
         int port = Int32.Parse(System.Configuration.ConfigurationManager.AppSettings.Get("port"));
+        string certFile = System.Configuration.ConfigurationManager.AppSettings.Get("certificate");
+        string certPass = System.Configuration.ConfigurationManager.AppSettings.Get("certificate_pass");
+        
         var server = new TcpListener(IPAddress.Any, port);
 
+        ClientHandler.serverCertificate = new X509Certificate2(certFile, certPass);
+
+        Console.WriteLine(ClientHandler.serverCertificate.ToString());
         server.Start();
         Console.WriteLine("Server has started on Any IP:{0}, Waiting for a connection...", port);
         ClientHandler.HandlersStack = new List<ClientHandler>();
