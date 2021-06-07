@@ -43,9 +43,9 @@ namespace WSServer
             // enter to an infinite cycle to be able to handle every change in stream
             while (true)
             {
-                while (Stream.CanRead && !Stream.DataAvailable) ;
+                while (Stream.CanRead && !Stream.DataAvailable) { Thread.Sleep(2000); };
                 if (!Stream.CanRead || !this.Client.Connected) break;
-                while (Client.Available < 3) ; // match against "get"
+                while (Client.Available < 3) { Thread.Sleep(2000); }; // match against "get"
                 readyBytes = Client.Available;
                 byte[] bytes = new byte[readyBytes];
                 Stream.Read(bytes, 0, readyBytes);
