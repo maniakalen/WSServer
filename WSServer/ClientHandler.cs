@@ -43,14 +43,21 @@ namespace WSServer
         private void DoHandle()
         {
             Stream = Client.GetStream();
-            SslStream = new SslStream(Stream, false);
+            SslStream = new SslStream(Stream, false, (sender, cert, chain, err) => true);
             try
             {
-                SslStream.AuthenticateAsServer(ClientHandler.serverCertificate, false, SslProtocols.Tls | SslProtocols.Tls11 | SslProtocols.Tls12 | SslProtocols.Tls13, true);
+                X509Certificate2 cert = new X509Certificate2(@"C:\Users\Administrator\Downloads\ws2.pfx", "1234");
+                
+                SslStream.AuthenticateAsServer(cert);
 
                 // Set timeouts for the read and write to 5 seconds.
                 SslStream.ReadTimeout = 5000;
                 SslStream.WriteTimeout = 5000;
+            }
+            catch (AuthenticationException e)
+            {
+                Console.WriteLine("Error " + e);
+                return;
             }
             catch (Exception ex)
             {
