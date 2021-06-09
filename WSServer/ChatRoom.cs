@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
     class ChatRoom : Receiver
     {
@@ -45,9 +45,9 @@ namespace WSServer
             this.History.Add(msg);
             foreach (ClientHandler handler in this.Participants)
             {
-                if (handler.Client.Connected && handler.GetStream().CanWrite && handler.User != null && handler.User.Username != msg.Sender)
+                if (ClientHandler.Server.IsClientConnected(handler.ClientIpPort) && handler.User != null && handler.User.Username != msg.Sender)
                 {
-                    msg.SendMessage(handler.GetStream());
+                    msg.SendMessage(handler.ClientIpPort);
                 }
             }
         }
@@ -58,7 +58,7 @@ namespace WSServer
             {
                 foreach (Message msg in this.History)
                 {
-                    msg.SendMessage(handler.GetStream());
+                    msg.SendMessage(handler.ClientIpPort);
                 }
             }
         }

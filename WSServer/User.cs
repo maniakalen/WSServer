@@ -1,4 +1,4 @@
-﻿namespace WSServer
+﻿namespace WatsonWebsocketServer
 {
     class User : Receiver
     {
@@ -27,7 +27,7 @@
         public void SendMessage(Message msg)
         {
             msg.Receiver = this.Username;
-            msg.SendMessage(this.Handler.GetStream());
+            msg.SendMessage(this.Handler.ClientIpPort);
         }
     }
 }

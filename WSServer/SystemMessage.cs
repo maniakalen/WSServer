@@ -1,7 +1,8 @@
 ﻿using System.Net.Sockets;
 using Newtonsoft.Json;
+using System;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
     class SystemMessage : Message
     {
@@ -13,19 +14,26 @@ namespace WSServer
         {
             if (this.Body == "EXIT")
             {
-                Message msg = new Message() { Body = "<[Off]>", Sender = handler.User.Username };
-                ClientHandler.Broadcast(msg, Communication.Types.System);
-                handler.Close();
-            } else if (this.Body == "STATUSES")
+                try
+                {
+                    Message msg = new Message() { Body = "<[Off]>", Sender = handler.User.Username };
+                    ClientHandler.Broadcast(msg, Communication.Types.System);
+                    handler.Close();
+                } catch (Exception ee)
+                {
+
+                }
+            }
+            else if (this.Body == "STATUSES")
             {
                 handler.SendStatuses();
             }
         }
 
-        public new void SendMessage(NetworkStream clientStream)
+        public new void SendMessage(string ClientIpPort)
         {
             string body = JsonConvert.SerializeObject(this);
-            Communication.Send(clientStream, this.Type, this);
+            Communication.Send(ClientIpPort, this.Type, this);
         }
 
         public static void SendJoinMessage(User user)

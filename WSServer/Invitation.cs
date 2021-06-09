@@ -1,7 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
     /// <summary>
     /// Chat invitation class
@@ -22,7 +23,7 @@ namespace WSServer
         public void SendInvitation(User rec)
         {
             Console.WriteLine("Type {0}", this.Type.ToString());
-            Communication.Send(rec.Handler.GetStream(), this.Type, this);
+            Communication.Send(rec.Handler.ClientIpPort, this.Type, this);
         }
 
         public void HandleInvitation()
@@ -30,20 +31,20 @@ namespace WSServer
             if (this.isAccepted)
             {
                 ChatRoom room = new ChatRoom();
-                foreach (ClientHandler h in ClientHandler.HandlersStack)
+                foreach (KeyValuePair<string, ClientHandler> entry in ClientHandler.HandlersDict)
                 {
-                    if (h.User.IsReceiver(this.Sender) || h.User.IsReceiver(this.Receiver))
+                    if (entry.Value.User.IsReceiver(this.Sender) || entry.Value.User.IsReceiver(this.Receiver))
                     {
-                        room.Add(h);
+                        room.Add(entry.Value);
                     }
                 }
                 ClientHandler.Receivers.Add(room);
             }
-            foreach (ClientHandler ch in ClientHandler.HandlersStack)
+            foreach (KeyValuePair<string, ClientHandler> entry in ClientHandler.HandlersDict)
             {
-                if (ch.User.Username == this.Receiver && ch.IsOnline())
+                if (entry.Value.User != null && entry.Value.User.Username == this.Receiver && entry.Value.IsOnline())
                 {
-                    this.SendInvitation(ch.User);
+                    this.SendInvitation(entry.Value.User);
                     break;
                 }
             }

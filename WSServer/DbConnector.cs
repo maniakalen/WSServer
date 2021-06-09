@@ -1,9 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Data;
 using MySql.Data.MySqlClient;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
+    
+
     class DbConnector
     {
         private MySqlConnection connection;
@@ -11,16 +15,17 @@ namespace WSServer
         private string database;
         private string uid;
         private string password;
-
+        private int port;
         private string authTable;
 
         //Constructor
-        public DbConnector(string server, string database, string uid, string pwd, string aTable)
+        public DbConnector(string server, int port, string database, string uid, string pwd, string aTable)
         {
             this.server = server;
             this.database = database;
             this.uid = uid;
             this.password = pwd;
+            this.port = port;
             this.authTable = aTable;
             Initialize();
         }
@@ -28,11 +33,11 @@ namespace WSServer
         //Initialize values
         private void Initialize()
         {
-            
-            string connectionString;
-            connectionString = "SERVER=" + server + ";" + "DATABASE=" +
-            database + ";" + "UID=" + uid + ";" + "PASSWORD=" + password + ";";
 
+            string connectionString;
+            connectionString = "SERVER=" + server + ";PORT=" + port + ";DATABASE=" +
+            database + ";" + "UID=" + uid + ";" + "PASSWORD=" + password + ";";
+            Console.WriteLine("Connection string: {0}", connectionString);
             connection = new MySqlConnection(connectionString);
         }
 
@@ -46,9 +51,10 @@ namespace WSServer
                 {
                     connection.Open();
                 }
-                
+
                 return true;
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -65,7 +71,7 @@ namespace WSServer
                 {
                     connection.Close();
                 }
-                
+
                 return true;
             }
             catch (Exception ex)
@@ -114,7 +120,8 @@ namespace WSServer
                 {
                     return Convert.ToInt32(result);
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -132,3 +139,4 @@ namespace WSServer
         }
     }
 }
+

@@ -1,4 +1,4 @@
-﻿namespace WSServer
+﻿namespace WatsonWebsocketServer
 {
     /// <summary>
     /// Defines basic reciever interface with common methods to use as receiver

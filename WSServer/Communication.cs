@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
     /// <summary>
     /// Communication class to define communication protocol
@@ -40,52 +40,16 @@ namespace WSServer
         /// Sending Communication Body to provided clientStream if clientStream is Writable.
         /// </summary>
         /// <param name="clientStream">Stream to send the message to</param>
-        public void Send(NetworkStream clientStream)
+        public void Send(string ClientIpPort)
         {
-            if (clientStream.CanWrite)
-            {
-                Task t = Task.Run(() => {
-                    string msg = JsonConvert.SerializeObject(this);
-                    Console.WriteLine("Sending message: {0}", msg);
-                    if (!clientStream.CanWrite) Console.WriteLine("Cannot write to stream!");
-                    try
-                    {
-                        byte fin = 0b10000000;
-                        byte opcode = 0b00000001;
-                        byte firstByte = opcode;
-                        int len = 125;
-                        do
-                        {
-                            if (msg.Length < len)
-                            {
-                                len = msg.Length;
-                                firstByte = (byte)(firstByte | fin);
-                            }
-                            string message = msg.Substring(0, len);
-                            msg = msg.Remove(0, len);
-
-                            byte[] byteMessage = Encoding.ASCII.GetBytes(message);
-                            byte[] empty = new byte[2] { firstByte, Convert.ToByte(message.Length) };
-                            byte[] preparedMsg = new byte[byteMessage.Length + empty.Length];
-                            Buffer.BlockCopy(empty, 0, preparedMsg, 0, empty.Length);
-                            Buffer.BlockCopy(byteMessage, 0, preparedMsg, empty.Length, byteMessage.Length);
-                            clientStream.Write(preparedMsg, 0, preparedMsg.Length);
-                            firstByte = 0;
-                        } while (msg.Length > 0);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("Error: {0}", e.Message);
-                    }
-                });
-                t.Wait();
-            }
+            ClientHandler.Server.SendAsync(ClientIpPort, JsonConvert.SerializeObject(this)).Wait();
         }
 
-        public static void Send(NetworkStream clientStream, Communication.Types Type, Message msg)
+        public static void Send(string ClientIpPort, Communication.Types Type, Message msg)
         {
             Communication com = new Communication() { Type = (int)Type, Body = JsonConvert.SerializeObject(msg) };
-            com.Send(clientStream);
+            com.Send(ClientIpPort);
         }
     }
 }
+

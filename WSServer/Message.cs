@@ -1,7 +1,7 @@
 ﻿using System.Net.Sockets;
 using Newtonsoft.Json;
 
-namespace WSServer
+namespace WatsonWebsocketServer
 {
     /// <summary>
     /// Message to be sent to the Receiver in the name of Sender
@@ -14,10 +14,11 @@ namespace WSServer
 
         protected Communication.Types Type = Communication.Types.Message;
 
-        public void SendMessage(NetworkStream clientStream)
+        public void SendMessage(string ClientIpPort)
         {
             string body = JsonConvert.SerializeObject(this);
-            Communication.Send(clientStream, this.Type, this);
+            Communication.Send(ClientIpPort, this.Type, this);
         }
     }
 }
+
