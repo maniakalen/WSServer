@@ -27,7 +27,7 @@ namespace WatsonWebsocketServer
             string tableName = System.Configuration.ConfigurationManager.AppSettings.Get("db_auth_table");
             ClientHandler.Db = new DbConnector(dbServer, port, db, uid, pwd, tableName);
 
-            using (WatsonWsServer wss = new WatsonWsServer(_Hostname, _Port, false))
+            using (WatsonWsServer wss = new WatsonWsServer(_Hostname, _Port, true))
             {
                 ClientHandler.Server = wss;
                 ClientHandler.HandlersDict = new Dictionary<string, ClientHandler>();
